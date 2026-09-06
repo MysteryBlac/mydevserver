@@ -17,8 +17,27 @@ jobs:
       - name: Check Python syntax
         run: python3 -m py_compile server.py
 
-      - name: Check application
+      - name: Start server
         run: |
-          python3 -m py_compile server.py
-          echo "Python syntax check passed"
+          python3 server.py > server.log 2>&1 &
+          echo $! > server.pid
+
+      - name: Wait for server
+        run: |
+          for i in {1..10}; do
+            if curl -s http://localhost:8000/status; then
+              echo "Server is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "Server failed to start"
+          cat server.log
+          exit 1
+
+      - name: Stop server
+        if: always()
+        run: |
+          kill $(cat server.pid) || true
 
