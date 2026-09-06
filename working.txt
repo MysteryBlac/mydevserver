@@ -1,0 +1,633 @@
+DevOps Learning Project — Commands & Workflow
+1. Application
+
+Project location:
+
+/home/mystex/myserver
+
+
+Run manually:
+
+cd /home/mystex/myserver
+python3 server.py
+
+
+Test:
+
+curl http://localhost:8000/status
+
+2. systemd Service
+
+Service file:
+
+/etc/systemd/system/myserver.service
+
+
+Example:
+
+[Unit]
+Description=My Python Server
+After=network.target
+
+[Service]
+Type=simple
+User=mystex
+WorkingDirectory=/home/mystex/myserver/
+ExecStart=/usr/bin/python3 /home/mystex/myserver/server.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
+
+Reload systemd:
+
+sudo systemctl daemon-reload
+
+
+Start:
+
+sudo systemctl start myserver
+
+
+Stop:
+
+sudo systemctl stop myserver
+
+
+Restart:
+
+sudo systemctl restart myserver
+
+
+Status:
+
+systemctl status myserver
+
+
+Enable at boot:
+
+sudo systemctl enable myserver
+
+
+Check enabled:
+
+systemctl is-enabled myserver
+
+
+Logs:
+
+journalctl -u myserver
+journalctl -u myserver -n 50 --no-pager
+journalctl -u myserver --since "10 minutes ago"
+
+
+Check process:
+
+systemctl show myserver -p MainPID
+
+
+Check restart count:
+
+systemctl show myserver -p NRestarts
+
+3. Fix Application Ownership
+
+If files were accidentally created as root:
+
+sudo chown -R mystex:mystex /home/mystex/myserver
+
+
+Work as application user:
+
+su - mystex
+cd /home/mystex/myserver
+
+
+Important:
+
+Application files → mystex
+Application process → mystex
+Git operations → mystex
+
+
+Avoid using sudo for Git operations.
+
+4. Git Configuration
+
+Check Git:
+
+git --version
+
+
+Check identity:
+
+git config --global user.name
+git config --global user.email
+
+
+Configure if necessary:
+
+git config --global user.name "Your Name"
+git config --global user.email "your-email@example.com"
+
+
+View configuration:
+
+git config --global --list
+
+5. Initialize Git Repository
+cd /home/mystex/myserver
+git init
+git status
+
+
+Create .gitignore:
+
+__pycache__/
+*.pyc
+*.log
+.env
+.venv/
+venv/
+
+
+Stage:
+
+git add server.py .gitignore
+
+
+Review:
+
+git status
+git diff --cached
+
+
+Commit:
+
+git commit -m "Initial server"
+
+
+View history:
+
+git log --oneline
+
+6. SSH for GitHub
+
+Check SSH directory:
+
+ls -la ~/.ssh
+
+
+Create Ed25519 key:
+
+ssh-keygen -t ed25519 -C "github-devops"
+
+
+Public key:
+
+cat ~/.ssh/id_ed25519.pub
+
+
+Add the public key to:
+
+GitHub → Settings → SSH and GPG keys → New SSH key
+
+
+Test:
+
+ssh -T git@github.com
+
+
+Expected:
+
+Hi YOUR_USERNAME! You've successfully authenticated,
+but GitHub does not provide shell access.
+
+
+Important:
+
+~/.ssh/id_ed25519
+
+
+is PRIVATE.
+
+Never share it.
+
+~/.ssh/id_ed25519.pub
+
+
+is PUBLIC.
+
+7. Connect Git to GitHub
+
+Add remote:
+
+git remote add origin git@github.com:YOUR_USERNAME/myserver.git
+
+
+Check:
+
+git remote -v
+
+
+Rename branch:
+
+git branch -M main
+
+
+Push:
+
+git push -u origin main
+
+
+Normal workflow:
+
+git status
+git add .
+git diff --cached
+git commit -m "Your message"
+git push
+
+8. GitHub Actions — CI
+
+Directory:
+
+.github/workflows/
+
+
+File:
+
+.github/workflows/ci.yml
+
+
+Basic workflow:
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check Python syntax
+        run: python3 -m py_compile server.py
+
+      - name: Start server
+        run: |
+          python3 server.py > server.log 2>&1 &
+          echo $! > server.pid
+
+      - name: Wait for server
+        run: |
+          for i in {1..10}; do
+            if curl -s http://localhost:8000/status; then
+              echo "Server is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "Server failed to start"
+          cat server.log
+          exit 1
+
+      - name: Stop server
+        if: always()
+        run: |
+          kill $(cat server.pid) || true
+
+
+Commit and push:
+
+git add .github/workflows/ci.yml
+git commit -m "Add CI workflow"
+git push
+
+
+CI flow:
+
+git push
+    ↓
+GitHub Actions
+    ↓
+Checkout
+    ↓
+Syntax check
+    ↓
+Start application
+    ↓
+curl /status
+    ↓
+PASS / FAIL
+    ↓
+Stop application
+
+9. Docker
+
+Check Docker:
+
+docker --version
+docker info
+
+
+Create:
+
+Dockerfile
+
+
+Contents:
+
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY server.py .
+
+EXPOSE 8000
+
+CMD ["python3", "server.py"]
+
+
+Build:
+
+docker build -t myserver:1.0 .
+
+
+Check image:
+
+docker images myserver
+
+10. Run Docker Container
+
+Because systemd is already using port 8000, use host port 8080:
+
+docker run -d \
+  --name myserver-container \
+  -p 8080:8000 \
+  myserver:1.0
+
+
+Check:
+
+docker ps
+
+
+Test:
+
+curl http://localhost:8080/status
+
+
+Architecture:
+
+Host :8080
+    ↓
+Container :8000
+    ↓
+Python application
+
+11. Docker Operations
+
+Running containers:
+
+docker ps
+
+
+All containers:
+
+docker ps -a
+
+
+Logs:
+
+docker logs myserver-container
+docker logs --tail 20 myserver-container
+docker logs -f myserver-container
+
+
+Inspect:
+
+docker inspect myserver-container
+
+
+Container status:
+
+docker inspect -f '{{.State.Status}}' myserver-container
+
+
+Port mapping:
+
+docker port myserver-container
+
+
+Resource usage:
+
+docker stats myserver-container
+
+
+Stop:
+
+docker stop myserver-container
+
+
+Start:
+
+docker start myserver-container
+
+
+Remove:
+
+docker rm myserver-container
+
+12. Docker Compose
+
+Check:
+
+docker compose version
+
+
+Create:
+
+compose.yaml
+
+
+Contents:
+
+services:
+  myserver:
+    build: .
+    container_name: myserver-container
+    ports:
+      - "8080:8000"
+    restart: unless-stopped
+
+
+Start:
+
+docker compose up -d
+
+
+Build + start:
+
+docker compose up -d --build
+
+
+Check:
+
+docker compose ps
+
+
+Logs:
+
+docker compose logs
+docker compose logs -f
+
+
+Stop/remove:
+
+docker compose down
+
+
+Test:
+
+curl http://localhost:8080/status
+
+13. Commit Docker Configuration
+git status
+git add Dockerfile compose.yaml
+git diff --cached
+git commit -m "Add Docker deployment"
+git push
+
+Current Project Structure
+myserver/
+├── .git/
+├── .github/
+│   └── workflows/
+│       └── ci.yml
+├── .gitignore
+├── Dockerfile
+├── compose.yaml
+└── server.py
+
+Current Architecture
+                         GitHub
+                            ▲
+                            │ git push
+                            │
+                    ┌───────┴───────┐
+                    │ Git repository │
+                    └───────┬───────┘
+                            │
+                            ▼
+                     GitHub Actions
+                            │
+                      CI / Testing
+                            │
+                            ▼
+                    Docker build
+                            │
+                            ▼
+                     Docker Image
+                            │
+                            ▼
+                      Container
+                            │
+                       host :8080
+                            │
+                            ▼
+                       Application
+
+
+The server currently also has the original deployment:
+
+Linux Server
+│
+├── systemd
+│     └── Python application :8000
+│
+└── Docker Compose
+      └── Python container :8080
+
+DevOps Journey Completed
+1. Python application
+        ↓
+2. systemd service
+        ↓
+3. Logging & service recovery
+        ↓
+4. Git
+        ↓
+5. GitHub + SSH
+        ↓
+6. GitHub Actions CI
+        ↓
+7. Application health check
+        ↓
+8. Docker
+        ↓
+9. Docker Compose
+
+Next Stages
+Docker Compose
+      ↓
+Docker Registry
+      ↓
+CI builds Docker image
+      ↓
+Push image to Registry
+      ↓
+CD / Deployment
+      ↓
+Remote Linux server
+      ↓
+Nginx / Reverse Proxy
+      ↓
+HTTPS
+      ↓
+Monitoring
+      ↓
+Logging
+      ↓
+Alerts
+
+
+The eventual target is:
+
+Developer
+    │
+    │ git push
+    ▼
+ GitHub
+    │
+    ▼
+GitHub Actions
+    │
+    ├── Test
+    ├── Build Docker image
+    └── Push image
+            │
+            ▼
+       Container Registry
+            │
+            ▼
+       Production Server
+            │
+          Docker
+            │
+         Container
+            │
+          Nginx
+            │
+            ▼
+         Internet
