@@ -6,7 +6,7 @@ class Server(BaseHTTPRequestHandler):
         if self.path == "/":
             self.send_response(200)
             self.end_headers()
-            self.wfile.write(b"Welcome to my server!")
+            self.wfile.write(b"Welcome to my server!"
 
         elif self.path == "/hello":
             self.send_response(200)
